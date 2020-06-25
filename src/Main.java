@@ -10,12 +10,8 @@ public class Main {
                     ("args tamanho " + args.length)));
         else {
             for (var arg : args) System.out.println(arg);
-            byte[] result;
-            do {
-                result = decrypt(args[0], args[1], args[2].getBytes());
-            } while (isNull(result));
-
-            System.out.println("RESULTADO:" + new String(result));
+            byte[] result = decrypt(args[0], args[1], args[2].getBytes());
+            System.out.println("RESULTADO:" + (isNull(result) ? "nulo" : new String(result)));
         }
     }
 }
