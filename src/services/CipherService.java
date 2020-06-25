@@ -1,56 +1,21 @@
 package services;
 
-import javax.crypto.*;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
 import javax.crypto.spec.IvParameterSpec;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.util.*;
+import java.security.Key;
+import java.security.SecureRandom;
 
 public class CipherService {
-    //DES
-    //CBC
-    //PKCS5
 
-    public static byte[] decrypt(String seed, String knownText, byte[] cryptogram)
-            throws NoSuchAlgorithmException, NoSuchPaddingException, BadPaddingException,
-            IllegalBlockSizeException, InvalidKeyException, InvalidAlgorithmParameterException {
-
-        return genIV(seed, knownText, cryptogram);
-//        try {
-//            KeyGenerator keyGenerator = KeyGenerator.getInstance("DES");
-//            Cipher c = Cipher.getInstance("DES/CBC/PKCS5Padding");
-//            SecureRandom sr = new SecureRandom();
-//            sr.setSeed(seed.getBytes());
-//
-//            IvParameterSpec spec = new IvParameterSpec(generateIV());
-//            keyGenerator.init(56, sr);
-//            Key key = keyGenerator.generateKey();
-//
-//            c.init(Cipher.DECRYPT_MODE, key, spec);
-//
-//            byte[] result = c.doFinal(cryptogram);
-//            String resultString = new String(result, StandardCharsets.UTF_8);
-//            System.out.println("RANDOM BYTES - POSSÍVEL IV:" + Arrays.toString(spec.getIV()));
-//            System.out.println("RESULT: " + resultString);
-//
-//            if (resultString.contains(knownText)) {
-//                System.out.println("decodificado com sucesso!");
-//                System.out.println(resultString);
-//                for (byte b : result) {
-//                    System.out.println(b);
-//                }
-//                return result;
-//            }
-//            return null;
-//        } catch (Exception e) {
-//            if (!e.getLocalizedMessage().contains("padded")) System.out.println(e.getLocalizedMessage());
-//            return null;
-//        }
+    public static byte[] findIVAndDecrypt(String seed, String knownText, String cryptogram) {
+        return decrypt(seed, knownText, convertToBytes(cryptogram));
     }
 
-
-    private static byte[] genIV(String seed, String knownText, byte[] cryptogram) {
+    private static byte[] decrypt(String seed, String knownText, byte[] cryptogram) {
         String current = "";
+        //Cria IV's (do 00000000 ao 99999999) para tentar decriptar a mensagem com sucesso
         for (int i = 0; i <= 9; i++) {
             current += i;
             for (int j = 0; j <= 9; j++) {
@@ -67,37 +32,35 @@ public class CipherService {
                                     current += p;
                                     for (int q = 0; q <= 9; q++) {
                                         current += q;
-                                        System.out.println("current: " + current);
                                         try {
-                                            KeyGenerator keyGenerator = KeyGenerator.getInstance("DES");
-                                            Cipher c = Cipher.getInstance("DES/CBC/PKCS5Padding");
+                                            // Gera PRNG a partir da semente
                                             SecureRandom sr = SecureRandom.getInstance("SHA1PRNG");
                                             sr.setSeed(seed.getBytes());
 
-                                            IvParameterSpec spec = new IvParameterSpec(current.getBytes());
+                                            // Cria chave DES com o PRNG gerado
+                                            KeyGenerator keyGenerator = KeyGenerator.getInstance("DES");
                                             keyGenerator.init(56, sr);
                                             Key key = keyGenerator.generateKey();
 
+                                            //Obtem o IV corrente (tentativa da vez)
+                                            byte[] iv = current.getBytes();
+                                            IvParameterSpec spec = new IvParameterSpec(iv);
+
+                                            //Decripta o criptograma com a chave e o IV fornecidos
+                                            Cipher c = Cipher.getInstance("DES/CBC/PKCS5Padding");
                                             c.init(Cipher.DECRYPT_MODE, key, spec);
+                                            byte[] decrypted = c.doFinal(cryptogram);
 
-                                            byte[] result = c.doFinal(cryptogram);
-                                            System.out.println("RANDOM BYTES - POSSÍVEL IV:" + Arrays.toString(spec.getIV()));
-
-                                            result = Base64.getDecoder().decode(result);
-                                            String resultString = new String(result, StandardCharsets.UTF_8);
-                                            System.out.println("RESULT: " + resultString);
-
-                                            if (resultString.contains(knownText)) {
-                                                System.out.println("decodificado com sucesso!");
-                                                System.out.println(resultString);
-                                                for (byte b : result) {
-                                                    System.out.println(b);
-                                                }
-                                                return result;
+                                            //Verifica conteudo da mensagem (se é válida, retorna o IV atual)
+                                            String decryptedString = new String(decrypted, StandardCharsets.UTF_8);
+                                            if (decryptedString.contains(knownText)) {
+                                                System.out.println("Decodificado com sucesso!");
+                                                System.out.println("IV: " + current + " - Mensagem: " + decryptedString);
+                                                return decrypted;
                                             }
+
                                         } catch (Exception e) {
-                                            if (!e.getLocalizedMessage().contains("padded"))
-                                                System.out.println(e.getLocalizedMessage());
+                                            System.out.println("Erro inesperado. Tente novamente!");
                                         }
                                         current = current.substring(0, 7);
                                     }
@@ -114,27 +77,19 @@ public class CipherService {
                 current = current.substring(0, 1);
             }
             current = "";
-            if(i == 9) return null;
+            if (i == 9) return null;
         }
         return null;
     }
 
-    private static byte[] generateIV() {
-        List<Integer> solution = new ArrayList<>();
-        for (int i = 0; i <= 9; i++) {
-            solution.add(i);
+    private static byte[] convertToBytes(String hex) {
+        byte[] hexBytes = new byte[hex.length() / 2];
+        int i = 0;
+        while (i < hex.length()) {
+            int val = ((Character.digit(hex.charAt(i), 16) << 4) + Character.digit(hex.charAt(i + 1), 16));
+            hexBytes[i / 2] = (byte) val;
+            i += 2;
         }
-        Collections.shuffle(solution);
-
-        String result = "";
-        byte[] resByte = new byte[8];
-        for (int i = 0; i < 8; i++) {
-            result = result.concat(String.valueOf(solution.get(i)));
-            resByte[i] = solution.get(i).byteValue();
-        }
-
-        //System.out.println("RANDOM BYTES - POSSÍVEL IV:" + result);
-        return result.getBytes();
-//        return resByte;
+        return hexBytes;
     }
 }
